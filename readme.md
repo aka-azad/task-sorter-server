@@ -30,8 +30,8 @@ This is the backend for a Task Management Application built with Express.js and 
 
 1. Clone the repository:
    ```sh
-   git clone https://github.com/aka-azad/task-sorter-server
-   cd task-management-server
+   git clone https://github.com/aka-azad/task-sorter-server.git
+   cd task-sorter-server
    ```
 2. Install dependencies:
    ```sh
