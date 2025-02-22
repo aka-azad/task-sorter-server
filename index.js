@@ -23,10 +23,10 @@ app.use(express.json());
 
 // WebSocket connection
 wss.on("connection", (ws) => {
-  console.log("Client connected");
+  // console.log("Client connected");
 
   ws.on("close", () => {
-    console.log("Client disconnected");
+    // console.log("Client disconnected");
   });
 });
 
@@ -244,7 +244,7 @@ async function run() {
     });
 
     await client.db("admin").command({ ping: 1 });
-    console.log("Connected to MongoDB!");
+    // console.log("Connected to MongoDB!");
   } finally {
     // await client.close();
   }
@@ -253,5 +253,5 @@ async function run() {
 run().catch(console.dir);
 
 server.listen(port, () => {
-  console.log(`Server is running on http://localhost:${port}`);
+  // console.log(`Server is running on http://localhost:${port}`);
 });
