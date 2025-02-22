@@ -13,11 +13,12 @@ const port = process.env.PORT || 3000;
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-app.use(cors(
-  {
-    origin: 'https://task-sorter-by-ashraf.web.app/',
-  }
-));
+app.use(
+  cors({
+    origin: "https://task-sorter-by-ashraf.web.app",
+    credentials: true,
+  })
+);
 app.use(express.json());
 
 // WebSocket connection
@@ -104,13 +105,13 @@ async function run() {
       }
     });
 
-    app.get("/tasks/:userId", verifyToken,  async (req, res) => {
+    app.get("/tasks/:userId", verifyToken, async (req, res) => {
       const userId = req.params.userId;
       const tasks = await taskCollection.find({ userId: userId }).toArray();
       res.send(tasks);
     });
 
-    app.post("/tasks", verifyToken,async (req, res) => {
+    app.post("/tasks", verifyToken, async (req, res) => {
       const taskData = req.body;
 
       if (!taskData.title || !taskData.category || !taskData.userId) {
@@ -141,7 +142,7 @@ async function run() {
       }
     });
 
-    app.put("/edit-task/:id", verifyToken,async (req, res) => {
+    app.put("/edit-task/:id", verifyToken, async (req, res) => {
       try {
         const id = req.params.id;
         if (!ObjectId.isValid(id)) {
@@ -189,7 +190,7 @@ async function run() {
       }
     });
 
-    app.delete("/tasks/:id",verifyToken, async (req, res) => {
+    app.delete("/tasks/:id", verifyToken, async (req, res) => {
       const id = req.params.id;
 
       try {
@@ -213,7 +214,7 @@ async function run() {
       }
     });
 
-    app.put("/tasks/reorder", verifyToken,async (req, res) => {
+    app.put("/tasks/reorder", verifyToken, async (req, res) => {
       const { tasks } = req.body;
 
       if (!tasks || !Array.isArray(tasks)) {
