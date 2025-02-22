@@ -1,21 +1,41 @@
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const express = require("express");
 const cors = require("cors");
+const jwt = require("jsonwebtoken");
+const http = require("http");
+const WebSocket = require("ws");
 require("dotenv").config();
 
 const app = express();
-const port = process.env.PORT ||3000;
+const port = process.env.PORT || 3000;
+
+// Create HTTP server for WebSocket support
+const server = http.createServer(app);
+const wss = new WebSocket.Server({ server });
 
 app.use(cors());
 app.use(express.json());
 
-app.get("/", (req, res) => {
-  res.send("Task Sorter API Running");
+// WebSocket connection
+wss.on("connection", (ws) => {
+  console.log("Client connected");
+
+  ws.on("close", () => {
+    console.log("Client disconnected");
+  });
 });
 
-const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@main.h0ug1.mongodb.net/?retryWrites=true&w=majority&appName=main`;
+// Function to broadcast messages to all connected clients
+const broadcast = (message) => {
+  wss.clients.forEach((client) => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(JSON.stringify(message));
+    }
+  });
+};
 
-// Create a MongoClient with a MongoClientOptions object to set the Stable API version
+// const uri = `mongodb://localhost:27017/?appName=task-sorter`;
+const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@main.h0ug1.mongodb.net/?retryWrites=true&w=majority&appName=main`;
 const client = new MongoClient(uri, {
   serverApi: {
     version: ServerApiVersion.v1,
@@ -26,23 +46,193 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
-    // Connect the client to the server	(optional starting in v4.7)
-    await client.connect();
+    const taskSorterDB = client.db("task-sorter");
+    const taskCollection = taskSorterDB.collection("tasks");
+    const usersCollection = taskSorterDB.collection("users");
 
-    
+    app.get("/", (req, res) => {
+      res.send("Task Sorter API Running");
+    });
 
-    // Send a ping to confirm a successful connection
+    app.post("/jwt", (req, res) => {
+      const { email } = req.body;
+      if (!email) {
+        return res.status(400).send({ message: "Email is required" });
+      }
+      const token = jwt.sign({ email }, process.env.JWT_SECRET, {
+        expiresIn: "3h",
+      });
+      res.send({ token });
+    });
+
+    app.post("/users", async (req, res) => {
+      const userCredential = req.body;
+      const userEmail = req.body.email;
+      const filter = { email: userEmail };
+      const oldUser = await usersCollection.findOne(filter);
+
+      if (!oldUser) {
+        const result = await usersCollection.insertOne({
+          ...userCredential,
+          userCreated: new Date().toISOString(),
+        });
+        res.send(result);
+        return;
+      } else {
+        const updateResult = await usersCollection.updateOne(filter, {
+          $set: { lastSignIn: userCredential.lastSignIn },
+        });
+        res.send(updateResult);
+      }
+    });
+
+    app.get("/tasks/:userId", async (req, res) => {
+      const userId = req.params.userId;
+      const tasks = await taskCollection.find({ userId: userId }).toArray();
+      res.send(tasks);
+    });
+
+    app.post("/tasks", async (req, res) => {
+      const taskData = req.body;
+
+      if (!taskData.title || !taskData.category || !taskData.userId) {
+        return res.status(400).send({ message: "Missing required fields" });
+      }
+
+      try {
+        const lastTask = await taskCollection
+          .find({ category: taskData.category, userId: taskData.userId })
+          .sort({ orderIndex: -1 })
+          .limit(1)
+          .toArray();
+
+        const nextOrderIndex =
+          lastTask.length > 0 ? lastTask[0].orderIndex + 1 : 0;
+
+        const newTask = { ...taskData, orderIndex: nextOrderIndex };
+
+        const result = await taskCollection.insertOne(newTask);
+
+        // Broadcast new task to all connected clients
+        broadcast({ type: "TASK_ADDED", payload: newTask });
+
+        res.send(result);
+      } catch (error) {
+        console.error("Error adding task:", error);
+        res.status(500).send({ message: "Failed to add task" });
+      }
+    });
+
+    app.put("/edit-task/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        if (!ObjectId.isValid(id)) {
+          return res.status(400).json({ error: "Invalid task ID" });
+        }
+        const updatedTask = req.body;
+        const {
+          title,
+          category,
+          userId,
+          description,
+          timestamp,
+          email,
+          orderIndex,
+          dueDate,
+        } = updatedTask;
+
+        const result = await taskCollection.updateOne(
+          { _id: new ObjectId(id) },
+          {
+            $set: {
+              title,
+              category,
+              userId,
+              description,
+              timestamp,
+              email,
+              orderIndex,
+              dueDate,
+            },
+          }
+        );
+
+        if (result.matchedCount === 0) {
+          return res.status(404).json({ error: "Task not found" });
+        }
+
+        // Broadcast updated task
+        broadcast({ type: "TASK_UPDATED", payload: updatedTask });
+
+        res.send({ success: true, message: "Task updated successfully!" });
+      } catch (error) {
+        console.error("Error updating task:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+      }
+    });
+
+    app.delete("/tasks/:id", async (req, res) => {
+      const id = req.params.id;
+
+      try {
+        const task = await taskCollection.findOne({ _id: new ObjectId(id) });
+
+        if (!task) {
+          return res.status(404).json({ message: "Task not found" });
+        }
+
+        const result = await taskCollection.deleteOne({
+          _id: new ObjectId(id),
+        });
+
+        // Broadcast deleted task
+        broadcast({ type: "TASK_DELETED", payload: id });
+
+        res.send(result);
+      } catch (error) {
+        console.error("Error deleting task:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+      }
+    });
+
+    app.put("/tasks/reorder", async (req, res) => {
+      const { tasks } = req.body;
+
+      if (!tasks || !Array.isArray(tasks)) {
+        return res.status(400).json({ message: "Invalid task data" });
+      }
+
+      try {
+        const bulkOps = tasks.map((task) => ({
+          updateOne: {
+            filter: { _id: new ObjectId(task._id) },
+            update: {
+              $set: { orderIndex: task.orderIndex, category: task.category },
+            },
+          },
+        }));
+
+        await taskCollection.bulkWrite(bulkOps);
+
+        // Broadcast updated tasks if using WebSockets
+        broadcast({ type: "TASKS_REORDERED", payload: tasks });
+
+        res.send({ success: true });
+      } catch (error) {
+        console.error("Reordering error:", error);
+        res.status(500).json({ message: "Failed to reorder tasks" });
+      }
+    });
+
     await client.db("admin").command({ ping: 1 });
-    console.log(
-      "Pinged your deployment. You successfully connected to MongoDB!"
-    );
+    console.log("Connected to MongoDB!");
   } finally {
-    // Ensures that the client will close when you finish/error
-    await client.close();
+    // await client.close();
   }
 }
+
 run().catch(console.dir);
 
-app.listen(port, () => {
+server.listen(port, () => {
   console.log(`Server is running on http://localhost:${port}`);
 });
