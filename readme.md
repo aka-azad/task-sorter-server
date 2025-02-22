@@ -1,9 +1,11 @@
 # Task Management Application - Server Side
 
 ## Description
+
 This is the backend for a Task Management Application built with Express.js and MongoDB. The server handles authentication, task management, and real-time updates.
 
 ## Technologies Used
+
 - **Backend Framework:** Express.js
 - **Database:** MongoDB
 - **Authentication:** JSON Web Tokens (JWT)
@@ -12,6 +14,7 @@ This is the backend for a Task Management Application built with Express.js and 
 - **Real-time Communication:** WebSockets (ws)
 
 ## Dependencies
+
 ```json
 "dependencies": {
   "cors": "^2.8.5",
@@ -24,6 +27,7 @@ This is the backend for a Task Management Application built with Express.js and 
 ```
 
 ## Installation
+
 1. Clone the repository:
    ```sh
    git clone https://github.com/your-username/task-management-server.git
@@ -35,8 +39,8 @@ This is the backend for a Task Management Application built with Express.js and 
    ```
 3. Create a `.env` file in the root directory and add your environment variables:
    ```env
-   PORT=5000
-   MONGODB_URI=your_mongodb_connection_string
+   DB_USER=MongoDB_User_Id
+   DB_PASSWORD=MongoDB_User_Password
    JWT_SECRET=your_jwt_secret
    ```
 4. Start the server:
@@ -45,12 +49,14 @@ This is the backend for a Task Management Application built with Express.js and 
    ```
 
 ## API Endpoints
+
 - **POST /tasks** - Add a new task
 - **GET /tasks** - Retrieve all tasks for the logged-in user
 - **PUT /tasks/:id** - Update task details
 - **DELETE /tasks/:id** - Delete a task
 
 ## Features
+
 - **Secure Authentication:** Uses JWT for user authentication.
 - **Task Management:** Supports CRUD operations.
 - **Real-time Updates:** Uses WebSockets for live task updates.
