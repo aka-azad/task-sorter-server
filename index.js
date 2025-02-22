@@ -13,7 +13,11 @@ const port = process.env.PORT || 3000;
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-app.use(cors());
+app.use(cors(
+  {
+    origin: 'https://task-sorter-by-ashraf.web.app/',
+  }
+));
 app.use(express.json());
 
 // WebSocket connection
@@ -65,6 +69,20 @@ async function run() {
       res.send({ token });
     });
 
+    const verifyToken = (req, res, next) => {
+      if (!req.headers.authorization) {
+        return res.status(401).send({ message: "unauthorized access" });
+      }
+      const token = req.headers.authorization.split(" ")[1];
+      jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
+        if (err) {
+          return res.status(401).send({ message: "unauthorized access" });
+        }
+        req.decoded = decoded;
+        next();
+      });
+    };
+
     app.post("/users", async (req, res) => {
       const userCredential = req.body;
       const userEmail = req.body.email;
@@ -86,13 +104,13 @@ async function run() {
       }
     });
 
-    app.get("/tasks/:userId", async (req, res) => {
+    app.get("/tasks/:userId", verifyToken,  async (req, res) => {
       const userId = req.params.userId;
       const tasks = await taskCollection.find({ userId: userId }).toArray();
       res.send(tasks);
     });
 
-    app.post("/tasks", async (req, res) => {
+    app.post("/tasks", verifyToken,async (req, res) => {
       const taskData = req.body;
 
       if (!taskData.title || !taskData.category || !taskData.userId) {
@@ -123,7 +141,7 @@ async function run() {
       }
     });
 
-    app.put("/edit-task/:id", async (req, res) => {
+    app.put("/edit-task/:id", verifyToken,async (req, res) => {
       try {
         const id = req.params.id;
         if (!ObjectId.isValid(id)) {
@@ -171,7 +189,7 @@ async function run() {
       }
     });
 
-    app.delete("/tasks/:id", async (req, res) => {
+    app.delete("/tasks/:id",verifyToken, async (req, res) => {
       const id = req.params.id;
 
       try {
@@ -195,7 +213,7 @@ async function run() {
       }
     });
 
-    app.put("/tasks/reorder", async (req, res) => {
+    app.put("/tasks/reorder", verifyToken,async (req, res) => {
       const { tasks } = req.body;
 
       if (!tasks || !Array.isArray(tasks)) {
